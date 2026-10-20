@@ -1,7 +1,10 @@
 import { useCallback } from 'react';
 import { MessageSquare, GitBranch, Tag, Volume2, Plus, Trash2, Info } from 'lucide-react';
 import { useStore } from '../store/store';
-import { resolveActorImage, resolveExpressionImage, resolveSoundCode } from '../utils/dialogue';
+import {
+  resolveActorImage, resolveExpressionImage, resolveSoundCode,
+  applyBBCode, parseBBCodeToReact,
+} from '../utils/dialogue';
 
 const EXECUTION_RULES = ['ONCE', 'REPEAT_UNTIL_N_TIMES', 'UNTIL_NODE_ENDS'];
 const TRIGGERS = ['ON_NODE_START'];
@@ -9,7 +12,7 @@ const TRIGGERS = ['ON_NODE_START'];
 const TYPE_META = {
   dialogueNode: { label: 'Dialogue Node', icon: MessageSquare, color: '#3b82f6' },
   choiceNode:   { label: 'Choice Node',   icon: GitBranch,    color: '#8b5cf6' },
-  tagNode:      { label: 'Tag Node',      icon: Tag,          color: '#10b981' },
+  tagNode:      { label: 'Tag Node (Legacy)', icon: Tag,       color: '#10b981' },
 };
 
 // ── Dialogue Inspector ────────────────────────────────────────────────────────
@@ -68,7 +71,36 @@ function DialogueInspector({ node }) {
         </>
       )}
 
-      <div className="inspector-section">Dialogue Text</div>
+      <div className="inspector-section">Integrated Tags</div>
+      <div className="inspector-field">
+        <label className="inspector-label" style={{ color: '#34d399' }}>+ Grant Tag (Optional)</label>
+        <input
+          className="inspector-input"
+          style={{ fontFamily: 'JetBrains Mono' }}
+          placeholder="e.g. met_npc"
+          value={data.grantTag || ''}
+          onChange={e => update({ grantTag: e.target.value })}
+        />
+      </div>
+      <div className="inspector-field">
+        <label className="inspector-label" style={{ color: '#f87171' }}>- Revoke Tag (Optional)</label>
+        <input
+          className="inspector-input"
+          style={{ fontFamily: 'JetBrains Mono' }}
+          placeholder="e.g. intro_active"
+          value={data.revokeTag || ''}
+          onChange={e => update({ revokeTag: e.target.value })}
+        />
+      </div>
+
+      <div className="inspector-section">
+        Dialogue Text
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px' }}>
+          <button type="button" onClick={() => update({ text: applyBBCode(data.text || '', 'b') })} style={{ padding: '2px 6px', fontSize: '11px', fontWeight: 700, borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer' }}>B</button>
+          <button type="button" onClick={() => update({ text: applyBBCode(data.text || '', 'i') })} style={{ padding: '2px 6px', fontSize: '11px', fontStyle: 'italic', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer' }}>I</button>
+          <button type="button" onClick={() => update({ text: applyBBCode(data.text || '', 'color', '#3b82f6') })} style={{ padding: '2px 6px', fontSize: '11px', borderRadius: '4px', border: '1px solid var(--border)', background: 'rgba(59,130,246,0.2)', color: '#93c5fd', cursor: 'pointer' }}>Color</button>
+        </div>
+      </div>
       <div className="inspector-field">
         <textarea
           className="inspector-input inspector-textarea"
@@ -78,6 +110,13 @@ function DialogueInspector({ node }) {
           rows={4}
         />
       </div>
+
+      {data.text && (
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px', marginBottom: '12px', fontSize: '12px', lineHeight: 1.5 }}>
+          <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Formatted Preview:</div>
+          {parseBBCodeToReact(data.text)}
+        </div>
+      )}
 
       <div className="inspector-section">
         <Volume2 size={12} style={{ color: 'var(--accent-amber)' }} />
@@ -127,22 +166,66 @@ function DialogueInspector({ node }) {
 
 // ── Choice Inspector ──────────────────────────────────────────────────────────
 function ChoiceInspector({ node }) {
-  const { dispatch } = useStore();
+  const { state, dispatch } = useStore();
+  const { actors } = state;
   const { id, data } = node;
 
+  const actor = actors.find(a => a.name === data.actorName) || null;
+  const expressions = actor?.expressions || [];
+
+  const update = (patch) => dispatch({ type: 'UPDATE_NODE_DATA', payload: { id, patch } });
   const addOption = () => dispatch({ type: 'ADD_CHOICE_OPTION', payload: { nodeId: id } });
   const updateOption = (optId, patch) => dispatch({ type: 'UPDATE_CHOICE_OPTION', payload: { nodeId: id, optId, patch } });
   const deleteOption = (optId) => dispatch({ type: 'DELETE_CHOICE_OPTION', payload: { nodeId: id, optId } });
 
   return (
     <>
+      <div className="inspector-section">Actor & Expression</div>
+      <div className="inspector-field">
+        <label className="inspector-label">Actor</label>
+        <select
+          className="inspector-input inspector-select"
+          value={data.actorName || ''}
+          onChange={e => update({ actorName: e.target.value, expressionName: '' })}
+        >
+          <option value="">— None —</option>
+          {actors.map(a => <option key={a.name} value={a.name}>{a.name}</option>)}
+        </select>
+      </div>
+
+      {actor && (
+        <div className="inspector-field">
+          <label className="inspector-label">Expression</label>
+          <select
+            className="inspector-input inspector-select"
+            value={data.expressionName || ''}
+            onChange={e => update({ expressionName: e.target.value })}
+          >
+            <option value="">— Default —</option>
+            {expressions.map(ex => <option key={ex.name} value={ex.name}>{ex.name}</option>)}
+          </select>
+        </div>
+      )}
+
+      <div className="inspector-section">Node Tags</div>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+        <div className="inspector-field" style={{ flex: 1, marginBottom: 0 }}>
+          <label className="inspector-label" style={{ color: '#34d399' }}>+ Grant Tag</label>
+          <input className="inspector-input" style={{ fontFamily: 'JetBrains Mono' }} placeholder="grant_tag" value={data.grantTag || ''} onChange={e => update({ grantTag: e.target.value })} />
+        </div>
+        <div className="inspector-field" style={{ flex: 1, marginBottom: 0 }}>
+          <label className="inspector-label" style={{ color: '#f87171' }}>- Revoke Tag</label>
+          <input className="inspector-input" style={{ fontFamily: 'JetBrains Mono' }} placeholder="revoke_tag" value={data.revokeTag || ''} onChange={e => update({ revokeTag: e.target.value })} />
+        </div>
+      </div>
+
       <div className="inspector-section">Prompt Text</div>
       <div className="inspector-field">
         <textarea
           className="inspector-input inspector-textarea"
           placeholder="e.g. Will you be eating tonight?"
           value={data.prompt || ''}
-          onChange={e => dispatch({ type: 'UPDATE_NODE_DATA', payload: { id, patch: { prompt: e.target.value } } })}
+          onChange={e => update({ prompt: e.target.value })}
           rows={3}
         />
       </div>
@@ -169,11 +252,25 @@ function ChoiceInspector({ node }) {
             <input className="inspector-input" placeholder={`Option ${idx + 1}…`} value={opt.text}
               onChange={e => updateOption(opt.optId, { text: e.target.value })} />
           </div>
-          <div className="inspector-field" style={{ marginBottom: 0 }}>
-            <label className="inspector-label">Required Tag (optional)</label>
+          <div className="inspector-field">
+            <label className="inspector-label">Required Tag</label>
             <input className="inspector-input" style={{ fontFamily: 'JetBrains Mono', fontSize: '12px' }}
               placeholder="e.g. has_key" value={opt.requiredTag || ''}
               onChange={e => updateOption(opt.optId, { requiredTag: e.target.value })} />
+          </div>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <div className="inspector-field" style={{ flex: 1, marginBottom: 0 }}>
+              <label className="inspector-label" style={{ color: '#34d399' }}>+ Grant</label>
+              <input className="inspector-input" style={{ fontFamily: 'JetBrains Mono', fontSize: '11px' }}
+                placeholder="grant_tag" value={opt.grantTag || ''}
+                onChange={e => updateOption(opt.optId, { grantTag: e.target.value })} />
+            </div>
+            <div className="inspector-field" style={{ flex: 1, marginBottom: 0 }}>
+              <label className="inspector-label" style={{ color: '#f87171' }}>- Revoke</label>
+              <input className="inspector-input" style={{ fontFamily: 'JetBrains Mono', fontSize: '11px' }}
+                placeholder="revoke_tag" value={opt.revokeTag || ''}
+                onChange={e => updateOption(opt.optId, { revokeTag: e.target.value })} />
+            </div>
           </div>
         </div>
       ))}
@@ -181,7 +278,7 @@ function ChoiceInspector({ node }) {
   );
 }
 
-// ── Tag Inspector ─────────────────────────────────────────────────────────────
+// ── Legacy Tag Inspector ──────────────────────────────────────────────────────
 function TagInspector({ node }) {
   const { dispatch } = useStore();
   const { id, data } = node;
@@ -202,16 +299,6 @@ function TagInspector({ node }) {
           placeholder="e.g. has_key, met_npc" value={data.tagKey || ''}
           onChange={e => update({ tagKey: e.target.value })} />
       </div>
-      {data.tagKey && (
-        <span className="tag-chip" style={{
-          fontSize: '12px',
-          background: data.operation === 'GRANT' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-          borderColor: data.operation === 'GRANT' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)',
-          color: data.operation === 'GRANT' ? '#6ee7b7' : '#fca5a5',
-        }}>
-          {data.operation === 'GRANT' ? '+' : '-'} {data.tagKey}
-        </span>
-      )}
     </>
   );
 }

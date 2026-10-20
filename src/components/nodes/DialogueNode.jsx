@@ -1,8 +1,11 @@
 import { memo, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { MessageSquare, Volume2, Plus, Trash2 } from 'lucide-react';
+import { MessageSquare, Volume2, Plus, Trash2, Tag } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { resolveSoundCode, resolveActorImage, resolveExpressionImage } from '../../utils/dialogue';
+import {
+  resolveSoundCode, resolveActorImage, resolveExpressionImage,
+  applyBBCode, parseBBCodeToReact,
+} from '../../utils/dialogue';
 
 const EXECUTION_RULES = ['ONCE', 'REPEAT_UNTIL_N_TIMES', 'UNTIL_NODE_ENDS'];
 const TRIGGERS = ['ON_NODE_START'];
@@ -20,6 +23,11 @@ function DialogueNode({ id, data, selected }) {
 
   const stopPropagation = useCallback((e) => e.stopPropagation(), []);
 
+  const addTag = (tagType, tagValue) => {
+    const current = data[tagType] || '';
+    update({ [tagType]: applyBBCode(current, tagValue) });
+  };
+
   return (
     <div className={`node-dialogue ${selected ? 'selected' : ''}`}>
       <Handle type="target" position={Position.Left} id="input"
@@ -28,13 +36,13 @@ function DialogueNode({ id, data, selected }) {
       <div className="node-header node-header-dialogue">
         <MessageSquare size={12} />
         <span>Dialogue</span>
-        <span style={{ marginLeft: 'auto', fontFamily: 'JetBrains Mono', fontSize: '10px', opacity: 0.6 }}>
+        <span style={{ marginLeft: 'auto', fontFamily: 'JetBrains Mono', fontSize: '10px', opacity: 0.8, color: id === 'start' ? '#34d399' : 'inherit' }}>
           #{id}
         </span>
       </div>
 
       <div className="node-body" onMouseDown={stopPropagation}>
-        {/* Actor */}
+        {/* Actor Selection */}
         <div className="node-field">
           <label>Actor</label>
           <select
@@ -47,7 +55,7 @@ function DialogueNode({ id, data, selected }) {
           </select>
         </div>
 
-        {/* Expression */}
+        {/* Expression Selection */}
         {actor && expressions.length > 0 && (
           <div className="node-field">
             <label>Expression</label>
@@ -62,7 +70,7 @@ function DialogueNode({ id, data, selected }) {
           </div>
         )}
 
-        {/* Image preview chips */}
+        {/* Image Chips */}
         {actor && (
           <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '6px' }}>
             <span className="tag-chip" style={{ background: 'rgba(59,130,246,0.15)', borderColor: 'rgba(59,130,246,0.25)', color: '#93c5fd' }}>
@@ -76,9 +84,60 @@ function DialogueNode({ id, data, selected }) {
           </div>
         )}
 
-        {/* Text */}
+        {/* Integrated Grant/Revoke Tags */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: '9px', fontWeight: 600, color: '#34d399', textTransform: 'uppercase' }}>+ Grant Tag</label>
+            <input
+              className="node-input"
+              style={{ fontSize: '10px', padding: '3px 6px', fontFamily: 'JetBrains Mono' }}
+              placeholder="e.g. met_npc"
+              value={data.grantTag || ''}
+              onChange={e => update({ grantTag: e.target.value })}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: '9px', fontWeight: 600, color: '#f87171', textTransform: 'uppercase' }}>- Revoke Tag</label>
+            <input
+              className="node-input"
+              style={{ fontSize: '10px', padding: '3px 6px', fontFamily: 'JetBrains Mono' }}
+              placeholder="e.g. has_item"
+              value={data.revokeTag || ''}
+              onChange={e => update({ revokeTag: e.target.value })}
+            />
+          </div>
+        </div>
+
+        {/* BBCode Text Formatting Quick Buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+          <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Dialogue Text</label>
+          <div style={{ display: 'flex', gap: '3px' }}>
+            <button
+              type="button"
+              onClick={() => update({ text: applyBBCode(data.text || '', 'b') })}
+              style={{ padding: '1px 5px', fontSize: '10px', fontWeight: 700, borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer' }}
+            >
+              B
+            </button>
+            <button
+              type="button"
+              onClick={() => update({ text: applyBBCode(data.text || '', 'i') })}
+              style={{ padding: '1px 5px', fontSize: '10px', fontStyle: 'italic', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer' }}
+            >
+              I
+            </button>
+            <button
+              type="button"
+              onClick={() => update({ text: applyBBCode(data.text || '', 'color', '#3b82f6') })}
+              style={{ padding: '1px 5px', fontSize: '10px', borderRadius: '4px', border: '1px solid var(--border)', background: 'rgba(59,130,246,0.2)', color: '#93c5fd', cursor: 'pointer' }}
+            >
+              Color
+            </button>
+          </div>
+        </div>
+
+        {/* Text Field */}
         <div className="node-field">
-          <label>Dialogue Text</label>
           <textarea
             className="node-input node-textarea"
             placeholder="Enter dialogue text…"
@@ -87,6 +146,14 @@ function DialogueNode({ id, data, selected }) {
             rows={3}
           />
         </div>
+
+        {/* Live BBCode Canvas Preview */}
+        {data.text && (
+          <div style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px', padding: '6px', fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '8px', lineHeight: 1.4 }}>
+            <div style={{ fontSize: '9px', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase' }}>Canvas Preview:</div>
+            {parseBBCodeToReact(data.text)}
+          </div>
+        )}
 
         {/* Sound Blocks */}
         {(data.soundBlocks || []).map((sb) => (

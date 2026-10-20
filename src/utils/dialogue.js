@@ -1,3 +1,5 @@
+import { createElement } from 'react';
+
 // ── Fallback Resolvers ────────────────────────────────────────────────────────
 export function resolveActorImage(actor) {
   if (!actor) return '';
@@ -21,13 +23,20 @@ export function resolveBaseSoundCode(actor) {
   return actor.baseSoundCode?.trim() || `${actor.name}_sound_default`;
 }
 
-// ── Node Factories (id supplied by store counter) ─────────────────────────────
+// ── Node Factories ────────────────────────────────────────────────────────────
 export function createDialogueNode(id, position = { x: 100, y: 100 }) {
   return {
     id: String(id),
     type: 'dialogueNode',
     position,
-    data: { actorName: '', expressionName: '', text: '', soundBlocks: [] },
+    data: {
+      actorName: '',
+      expressionName: '',
+      text: '',
+      soundBlocks: [],
+      grantTag: '',
+      revokeTag: '',
+    },
   };
 }
 
@@ -36,7 +45,14 @@ export function createChoiceNode(id, position = { x: 100, y: 100 }) {
     id: String(id),
     type: 'choiceNode',
     position,
-    data: { prompt: '', options: [{ optId: 'a', text: '', requiredTag: '' }] },
+    data: {
+      actorName: '',
+      expressionName: '',
+      prompt: '',
+      grantTag: '',
+      revokeTag: '',
+      options: [{ optId: 'a', text: '', requiredTag: '', grantTag: '', revokeTag: '' }],
+    },
   };
 }
 
@@ -61,10 +77,31 @@ export function createActor(name = 'Actor') {
   return { name, imageCode: '', baseSoundCode: '', expressions: [] };
 }
 
+// ── BBCode Helper & Preview Generator ─────────────────────────────────────────
+export function applyBBCode(currentText, tagType, param = '') {
+  const openTag = param ? `[${tagType}=${param}]` : `[${tagType}]`;
+  const closeTag = `[/${tagType}]`;
+  return `${currentText}${openTag}${closeTag}`;
+}
+
+export function parseBBCodeToReact(text) {
+  if (!text) return null;
+
+  // Simple regex parser for [b], [i], [color=#hex] BBCode tags
+  let formatted = text
+    .replace(/[b](.*?)\[\/b\]/gi, '<strong>$1</strong>')
+    .replace(/[i](.*?)\[\/i\]/gi, '<em>$1</em>')
+    .replace(/\[color=(.*?)\](.*?)\[\/color\]/gi, '<span style="color: $1">$2</span>');
+
+  return createElement('span', {
+    dangerouslySetInnerHTML: { __html: formatted },
+  });
+}
+
 // ── Workspace Serialization ───────────────────────────────────────────────────
 export function serializeWorkspace(state) {
   return {
-    version: '1.0.0',
+    version: '1.1.0',
     dialogueName: state.dialogueName,
     nextNodeId: state.nextNodeId,
     actors: state.actors,
@@ -78,8 +115,11 @@ export function serializeWorkspace(state) {
 // ── Simplified Runtime JSON Export ───────────────────────────────────────────
 export function exportRuntimeJSON(dialogueName, nodes, edges, actors) {
   const actorMap = Object.fromEntries(actors.map(a => [a.name, a]));
+  
+  // Prefer explicit node with id "start", otherwise locate root node without target incoming edges
+  const startNode = nodes.find(n => n.id === 'start');
   const targetIds = new Set(edges.map(e => e.target));
-  const entryNode = nodes.find(n => !targetIds.has(n.id)) || nodes[0];
+  const entryNode = startNode || nodes.find(n => !targetIds.has(n.id)) || nodes[0];
 
   const nodesOut = {};
   for (const node of nodes) {
@@ -95,6 +135,10 @@ export function exportRuntimeJSON(dialogueName, nodes, edges, actors) {
         text: d.text || '',
         next: nextEdge?.target || null,
       };
+
+      if (d.grantTag) out.grant_tag = d.grantTag;
+      if (d.revokeTag) out.revoke_tag = d.revokeTag;
+
       if (actor) {
         out.actor_image = resolveActorImage(actor);
         if (d.expressionName) out.expression_image = resolveExpressionImage(actor, d.expressionName);
@@ -109,16 +153,31 @@ export function exportRuntimeJSON(dialogueName, nodes, edges, actors) {
       nodesOut[node.id] = out;
 
     } else if (node.type === 'choiceNode') {
-      nodesOut[node.id] = {
+      const actor = actorMap[d.actorName];
+      const out = {
         type: 'choice',
+        actor: d.actorName || null,
+        expression: d.expressionName || null,
         prompt: d.prompt || '',
         options: (d.options || []).map(opt => {
           const edge = edges.find(e => e.source === node.id && e.sourceHandle === `option-${opt.optId}`);
           const o = { text: opt.text, next: edge?.target || null };
           if (opt.requiredTag) o.required_tag = opt.requiredTag;
+          if (opt.grantTag) o.grant_tag = opt.grantTag;
+          if (opt.revokeTag) o.revoke_tag = opt.revokeTag;
           return o;
         }),
       };
+
+      if (d.grantTag) out.grant_tag = d.grantTag;
+      if (d.revokeTag) out.revoke_tag = d.revokeTag;
+
+      if (actor) {
+        out.actor_image = resolveActorImage(actor);
+        if (d.expressionName) out.expression_image = resolveExpressionImage(actor, d.expressionName);
+      }
+
+      nodesOut[node.id] = out;
 
     } else if (node.type === 'tagNode') {
       const nextEdge = edges.find(e => e.source === node.id && e.sourceHandle === 'next');
@@ -131,7 +190,7 @@ export function exportRuntimeJSON(dialogueName, nodes, edges, actors) {
     }
   }
 
-  return { dialogue_id: dialogueName, entry: entryNode?.id || null, nodes: nodesOut };
+  return { dialogue_id: dialogueName, entry: entryNode?.id || 'start', nodes: nodesOut };
 }
 
 // ── Godot .tres Export ────────────────────────────────────────────────────────
@@ -159,7 +218,7 @@ export function parseGDScriptDict(content) {
   return result;
 }
 
-// ── GDScript Library Builders (merge existing + new) ─────────────────────────
+// ── GDScript Library Builders ────────────────────────────────────────────────
 export function buildAudioLibrary(actors, nodes, existingContent = '') {
   const keys = parseGDScriptDict(existingContent);
 

@@ -1,5 +1,5 @@
-import { useCallback, useRef } from 'react';
-import { MessageSquare, GitBranch, Tag, Trash2, Copy, LayoutGrid } from 'lucide-react';
+import { useCallback, useRef, useMemo } from 'react';
+import { MessageSquare, GitBranch, Tag, Trash2, Copy, MapPin } from 'lucide-react';
 import { useStore } from '../store/store';
 
 const NODE_TYPES = [
@@ -8,21 +8,14 @@ const NODE_TYPES = [
     label: 'Dialogue',
     icon: MessageSquare,
     color: '#3b82f6',
-    desc: 'Actor speech with audio',
+    desc: 'Actor speech with integrated tags',
   },
   {
     type: 'choiceNode',
     label: 'Choice',
     icon: GitBranch,
     color: '#8b5cf6',
-    desc: 'Branching options',
-  },
-  {
-    type: 'tagNode',
-    label: 'Tag',
-    icon: Tag,
-    color: '#10b981',
-    desc: 'Grant or revoke tag',
+    desc: 'Branching options with actor & tags',
   },
 ];
 
@@ -68,19 +61,54 @@ export default function Sidebar({ reactFlowWrapper, reactFlowInstance }) {
     }
   }, [dispatch, state.selectedNodeId]);
 
+  // Aggregate all tags across nodes for the Tag Location Tracker
+  const tagList = useMemo(() => {
+    const list = [];
+    for (const node of state.nodes) {
+      const d = node.data;
+
+      if (d.grantTag) list.push({ tag: d.grantTag, type: 'GRANT', nodeId: node.id });
+      if (d.revokeTag) list.push({ tag: d.revokeTag, type: 'REVOKE', nodeId: node.id });
+
+      if (node.type === 'choiceNode' && d.options) {
+        d.options.forEach((opt, idx) => {
+          if (opt.requiredTag) list.push({ tag: opt.requiredTag, type: 'REQ', nodeId: node.id, detail: `Opt ${idx + 1}` });
+          if (opt.grantTag) list.push({ tag: opt.grantTag, type: 'GRANT', nodeId: node.id, detail: `Opt ${idx + 1}` });
+          if (opt.revokeTag) list.push({ tag: opt.revokeTag, type: 'REVOKE', nodeId: node.id, detail: `Opt ${idx + 1}` });
+        });
+      }
+
+      if (node.type === 'tagNode' && d.tagKey) {
+        list.push({ tag: d.tagKey, type: d.operation, nodeId: node.id });
+      }
+    }
+    return list;
+  }, [state.nodes]);
+
+  // Camera focus animation
+  const focusNode = useCallback((nodeId) => {
+    dispatch({ type: 'SELECT_NODE', payload: nodeId });
+    if (reactFlowInstance) {
+      const node = state.nodes.find(n => n.id === nodeId);
+      if (node) {
+        reactFlowInstance.fitView({
+          nodes: [{ id: nodeId }],
+          duration: 800,
+          maxZoom: 1.2,
+        });
+      }
+    }
+  }, [dispatch, reactFlowInstance, state.nodes]);
+
   return (
-    <div
-      className="sidebar"
-      onDrop={onDrop}
-      onDragOver={onDragOver}
-    >
+    <div className="sidebar" onDrop={onDrop} onDragOver={onDragOver}>
       {/* Header */}
       <div style={{ padding: '14px 14px 8px', borderBottom: '1px solid var(--border-subtle)' }}>
         <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>
           Node Spawner
         </div>
 
-        {/* Spawn cards */}
+        {/* Spawn Cards */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {NODE_TYPES.map(({ type, label, icon: Icon, color, desc }) => (
             <div
@@ -89,8 +117,8 @@ export default function Sidebar({ reactFlowWrapper, reactFlowInstance }) {
               draggable
               onDragStart={e => onDragStart(e, type)}
               onClick={() => spawnNode(type, {
-                x: 200 + Math.random() * 200,
-                y: 100 + Math.random() * 200,
+                x: 200 + Math.random() * 150,
+                y: 100 + Math.random() * 150,
               })}
               style={{ flexDirection: 'row', textAlign: 'left', alignItems: 'center', padding: '10px 12px' }}
             >
@@ -135,34 +163,50 @@ export default function Sidebar({ reactFlowWrapper, reactFlowInstance }) {
         </div>
       </div>
 
-      {/* Stats */}
-      <div style={{ padding: '12px 14px' }}>
-        <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px' }}>
-          Graph Stats
+      {/* Tag Location Tracker */}
+      <div style={{ padding: '12px 14px', flex: 1, overflowY: 'auto' }}>
+        <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Tag size={12} style={{ color: 'var(--accent-green)' }} /> Tag Location Index ({tagList.length})
         </div>
+
+        {tagList.length === 0 && (
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', padding: '6px 0' }}>
+            No active tags defined on any nodes.
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          {[
-            ['Nodes', state.nodes.length, '#3b82f6'],
-            ['Edges', state.edges.length, '#8b5cf6'],
-            ['Actors', state.actors.length, '#10b981'],
-          ].map(([label, val, color]) => (
-            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{label}</span>
-              <span style={{
-                fontSize: '12px', fontWeight: 700, color,
-                background: `${color}22`, borderRadius: '5px', padding: '1px 7px',
-              }}>
-                {val}
-              </span>
+          {tagList.map((item, idx) => (
+            <div
+              key={idx}
+              onClick={() => focusNode(item.nodeId)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '6px 8px', background: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: '6px', cursor: 'pointer', transition: 'all 0.15s',
+              }}
+              className="spawner-card-hover"
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
+                <span className="mono" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent-cyan)' }}>
+                  {item.tag}
+                </span>
+                {item.detail && <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>({item.detail})</span>}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{
+                  fontSize: '9px', fontWeight: 700, borderRadius: '4px', padding: '1px 4px',
+                  background: item.type === 'GRANT' ? 'rgba(16,185,129,0.2)' : item.type === 'REVOKE' ? 'rgba(239,68,68,0.2)' : 'rgba(124,58,237,0.2)',
+                  color: item.type === 'GRANT' ? '#34d399' : item.type === 'REVOKE' ? '#f87171' : '#c4b5fd',
+                }}>
+                  {item.type}
+                </span>
+                <span className="mono" style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                  <MapPin size={9} /> #{item.nodeId}
+                </span>
+              </div>
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* Tip */}
-      <div style={{ marginTop: 'auto', padding: '12px 14px', borderTop: '1px solid var(--border-subtle)' }}>
-        <div style={{ fontSize: '10px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          💡 Drag nodes onto canvas, or click to auto-place. Connect handles to wire the dialogue flow.
         </div>
       </div>
     </div>

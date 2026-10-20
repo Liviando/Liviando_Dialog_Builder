@@ -8,10 +8,13 @@ import { applyNodeChanges, applyEdgeChanges, addEdge } from '@xyflow/react';
 const initialState = {
   dialogueName: 'my_dialogue',
   nextNodeId: 1,
-  nodes: [],
+  nodes: [
+    // Default initial entry node named "start"
+    createDialogueNode('start', { x: 250, y: 150 })
+  ],
   edges: [],
   actors: [],
-  selectedNodeId: null,
+  selectedNodeId: 'start',
   importedAudioLib: '',
   importedSpriteLib: '',
 };
@@ -30,13 +33,14 @@ function reducer(state, action) {
       const p = action.payload;
       return {
         ...initialState,
-        dialogueName:    p.dialogueName    || 'my_dialogue',
-        nextNodeId:      p.nextNodeId      || 1,
-        nodes:           p.nodes           || [],
-        edges:           p.edges           || [],
-        actors:          p.actors          || [],
-        importedAudioLib: p.importedAudioLib || '',
+        dialogueName:      p.dialogueName      || 'my_dialogue',
+        nextNodeId:        p.nextNodeId        || 1,
+        nodes:             p.nodes             || [],
+        edges:             p.edges             || [],
+        actors:            p.actors            || [],
+        importedAudioLib:  p.importedAudioLib  || '',
         importedSpriteLib: p.importedSpriteLib || '',
+        selectedNodeId:    p.nodes?.[0]?.id    || null,
       };
     }
     case 'SET_DIALOGUE_NAME':
@@ -59,11 +63,14 @@ function reducer(state, action) {
 
     // ── Nodes ─────────────────────────────────────────────────────────────────
     case 'SPAWN_NODE': {
-      const id = String(state.nextNodeId);
+      // If no start node exists and canvas is empty, use 'start', else sequential numbers
+      const hasStart = state.nodes.some(n => n.id === 'start');
+      const id = (!hasStart && state.nodes.length === 0) ? 'start' : String(state.nextNodeId);
+      
       const node = createNode(action.payload.nodeType, id, action.payload.position);
       return {
         ...state,
-        nextNodeId: state.nextNodeId + 1,
+        nextNodeId: id === 'start' ? state.nextNodeId : state.nextNodeId + 1,
         nodes: [...state.nodes, node],
         selectedNodeId: id,
       };
@@ -149,7 +156,7 @@ function reducer(state, action) {
           n.id !== nodeId ? n : {
             ...n, data: {
               ...n.data,
-              options: [...(n.data.options || []), { optId: genOptId(), text: '', requiredTag: '' }],
+              options: [...(n.data.options || []), { optId: genOptId(), text: '', requiredTag: '', grantTag: '', revokeTag: '' }],
             },
           }
         ),
@@ -182,7 +189,7 @@ function reducer(state, action) {
       };
     }
 
-    // ── Actors (keyed by name) ────────────────────────────────────────────────
+    // ── Actors ────────────────────────────────────────────────────────────────
     case 'ADD_ACTOR':
       return { ...state, actors: [...state.actors, createActor(action.payload || 'Actor')] };
     case 'UPDATE_ACTOR': {
@@ -191,7 +198,6 @@ function reducer(state, action) {
       return {
         ...state,
         actors: state.actors.map(a => a.name === oldName ? { ...a, ...patch } : a),
-        // keep node references in sync if name changed
         nodes: newName !== oldName
           ? state.nodes.map(n =>
               n.data.actorName === oldName
@@ -214,7 +220,7 @@ function reducer(state, action) {
       };
     }
 
-    // ── Expressions (keyed by name within actor) ──────────────────────────────
+    // ── Expressions ───────────────────────────────────────────────────────────
     case 'ADD_EXPRESSION': {
       const { actorName } = action.payload;
       return {
