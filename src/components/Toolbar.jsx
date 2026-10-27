@@ -7,9 +7,10 @@ import { useStore } from '../store/store';
 import {
   serializeWorkspace, exportRuntimeJSON, exportGodotTres,
   buildAudioLibrary, buildSpriteLibrary, downloadFile, readFileAsText,
+  writeToDirectoryOrDownload,
 } from '../utils/dialogue';
 
-export default function Toolbar({ onOpenActorManager, dialogueName, setDialogueName }) {
+export default function Toolbar({ onOpenActorManager, dialogueName, setDialogueName, exportDirHandle }) {
   const { state, dispatch } = useStore();
   const fileInputRef = useRef();
   const audioImportRef = useRef();
@@ -28,8 +29,8 @@ export default function Toolbar({ onOpenActorManager, dialogueName, setDialogueN
   // ── Workspace load/save ───────────────────────────────────────────────────
   const handleSave = useCallback(() => {
     const workspace = serializeWorkspace(state);
-    downloadFile(JSON.stringify(workspace, null, 2), `${state.dialogueName}_workspace.json`);
-  }, [state]);
+    writeToDirectoryOrDownload(exportDirHandle, JSON.stringify(workspace, null, 2), `${state.dialogueName}_workspace.json`);
+  }, [state, exportDirHandle]);
 
   const handleLoad = useCallback(async (e) => {
     const file = e.target.files?.[0];
@@ -48,14 +49,14 @@ export default function Toolbar({ onOpenActorManager, dialogueName, setDialogueN
   // ── Exports ───────────────────────────────────────────────────────────────
   const handleExportJSON = useCallback(() => {
     const json = exportRuntimeJSON(state.dialogueName, state.nodes, state.edges, state.actors, state.entry);
-    downloadFile(JSON.stringify(json, null, 2), `${state.dialogueName}.json`);
-  }, [state]);
+    writeToDirectoryOrDownload(exportDirHandle, JSON.stringify(json, null, 2), `${state.dialogueName}.json`);
+  }, [state, exportDirHandle]);
 
   const handleExportTres = useCallback(() => {
     const json = exportRuntimeJSON(state.dialogueName, state.nodes, state.edges, state.actors, state.entry);
     const tres = exportGodotTres(state.dialogueName, json);
-    downloadFile(tres, `${state.dialogueName}.tres`, 'text/plain');
-  }, [state]);
+    writeToDirectoryOrDownload(exportDirHandle, tres, `${state.dialogueName}.tres`, 'text/plain');
+  }, [state, exportDirHandle]);
 
   // ── GDScript: import existing, then export merged ─────────────────────────
   const handleImportAudio = useCallback(async (e) => {
@@ -78,13 +79,13 @@ export default function Toolbar({ onOpenActorManager, dialogueName, setDialogueN
 
   const handleExportAudioLib = useCallback(() => {
     const gd = buildAudioLibrary(state.actors, state.nodes, state.importedAudioLib);
-    downloadFile(gd, 'AudioLibrary.gd', 'text/plain');
-  }, [state]);
+    writeToDirectoryOrDownload(exportDirHandle, gd, 'AudioLibrary.gd', 'text/plain');
+  }, [state, exportDirHandle]);
 
   const handleExportSpriteLib = useCallback(() => {
     const gd = buildSpriteLibrary(state.actors, state.importedSpriteLib);
-    downloadFile(gd, 'SpriteLibrary.gd', 'text/plain');
-  }, [state]);
+    writeToDirectoryOrDownload(exportDirHandle, gd, 'SpriteLibrary.gd', 'text/plain');
+  }, [state, exportDirHandle]);
 
   const hasImportedAudio  = !!state.importedAudioLib;
   const hasImportedSprite = !!state.importedSpriteLib;

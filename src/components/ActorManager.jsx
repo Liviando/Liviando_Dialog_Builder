@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { X, Users, Plus, Trash2, ChevronDown, ChevronRight, UserCircle, Upload, Download } from 'lucide-react';
 import { useStore } from '../store/store';
-import { resolveActorImage, resolveExpressionImage, exportActors, parseActors, downloadFile, readFileAsText } from '../utils/dialogue';
+import { resolveActorImage, resolveExpressionImage, exportActors, parseActors, downloadFile, readFileAsText, writeToDirectoryOrDownload } from '../utils/dialogue';
 
 function ExpressionRow({ actor, expr }) {
   const { dispatch } = useStore();
@@ -180,7 +180,7 @@ function ActorCard({ actor }) {
   );
 }
 
-export default function ActorManager({ onClose }) {
+export default function ActorManager({ onClose, exportDirHandle }) {
   const { state, dispatch } = useStore();
   const [newActorName, setNewActorName] = useState('');
   const importRef = useRef();
@@ -196,7 +196,7 @@ export default function ActorManager({ onClose }) {
   };
 
   const handleExportActors = () => {
-    downloadFile(exportActors(state.actors), 'actors.json');
+    writeToDirectoryOrDownload(exportDirHandle, exportActors(state.actors), 'actors.json');
   };
 
   const handleImportActors = async (e) => {

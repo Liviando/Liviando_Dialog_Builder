@@ -14,11 +14,30 @@ function EditorLayout() {
   const reactFlowWrapper = useRef(null);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
 
+  // ── Export folder (File System Access API) ────────────────────────────────
+  const [exportDirHandle, setExportDirHandle] = useState(null);
+
+  const pickExportFolder = useCallback(async () => {
+    if (!window.showDirectoryPicker) {
+      alert('Folder picker is not supported in this browser. All exports will use normal browser downloads.');
+      return;
+    }
+    try {
+      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      setExportDirHandle(handle);
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        // AbortError = user hit Cancel, ignore silently. Anything else — show it.
+        alert('Could not open folder: ' + err.message);
+      }
+    }
+  }, []);
+
   const onInit = useCallback((instance) => {
     setReactFlowInstance(instance);
   }, []);
 
-  // Handle drops from the sidebar onto the canvas
+  // ── Canvas drag-and-drop ──────────────────────────────────────────────────
   const handleCanvasDrop = useCallback((e) => {
     e.preventDefault();
     const type = e.dataTransfer.getData('application/dialoguenode');
@@ -44,6 +63,7 @@ function EditorLayout() {
         onOpenActorManager={() => setShowActorManager(true)}
         dialogueName={dialogueName}
         setDialogueName={setDialogueName}
+        exportDirHandle={exportDirHandle}
       />
 
       {/* Main Layout */}
@@ -51,6 +71,8 @@ function EditorLayout() {
         <Sidebar
           reactFlowWrapper={reactFlowWrapper}
           reactFlowInstance={reactFlowInstance}
+          exportDirHandle={exportDirHandle}
+          onPickFolder={pickExportFolder}
         />
 
         {/* Canvas wrapper handles drops */}
@@ -71,7 +93,10 @@ function EditorLayout() {
 
       {/* Actor Manager Modal */}
       {showActorManager && (
-        <ActorManager onClose={() => setShowActorManager(false)} />
+        <ActorManager
+          onClose={() => setShowActorManager(false)}
+          exportDirHandle={exportDirHandle}
+        />
       )}
     </div>
   );

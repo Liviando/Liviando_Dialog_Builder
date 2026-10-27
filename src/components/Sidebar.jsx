@@ -1,5 +1,5 @@
-import { useCallback, useRef, useMemo } from 'react';
-import { MessageSquare, GitBranch, Tag, Trash2, Copy, MapPin } from 'lucide-react';
+import { useCallback, useRef, useMemo, useState, useEffect } from 'react';
+import { MessageSquare, GitBranch, Tag, Trash2, Copy, MapPin, FolderOpen, FolderCheck } from 'lucide-react';
 import { useStore } from '../store/store';
 
 const NODE_TYPES = [
@@ -19,7 +19,7 @@ const NODE_TYPES = [
   },
 ];
 
-export default function Sidebar({ reactFlowWrapper, reactFlowInstance }) {
+export default function Sidebar({ reactFlowWrapper, reactFlowInstance, exportDirHandle, onPickFolder }) {
   const { state, dispatch, spawnNode } = useStore();
   const dragType = useRef(null);
 
@@ -100,9 +100,55 @@ export default function Sidebar({ reactFlowWrapper, reactFlowInstance }) {
     }
   }, [dispatch, reactFlowInstance, state.nodes]);
 
+  const folderName = exportDirHandle?.name || null;
+
+  // Local editable text for the path field; syncs when picker grants a real folder
+  const [pathText, setPathText] = useState(folderName || '');
+  useEffect(() => {
+    if (exportDirHandle?.name) setPathText(exportDirHandle.name);
+  }, [exportDirHandle]);
+
   return (
     <div className="sidebar" onDrop={onDrop} onDragOver={onDragOver}>
-      {/* Header */}
+
+      {/* Export Folder */}
+      <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+        <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {exportDirHandle
+            ? <FolderCheck size={12} style={{ color: 'var(--accent-green)' }} />
+            : <FolderOpen size={12} style={{ color: 'var(--text-muted)' }} />}
+          Export Folder
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <input
+            type="text"
+            className="inspector-input"
+            style={{
+              flex: 1, fontSize: '11px', fontFamily: 'JetBrains Mono',
+              color: folderName ? 'var(--accent-green)' : 'var(--text-primary)',
+            }}
+            value={pathText}
+            onChange={e => setPathText(e.target.value)}
+            placeholder="No folder selected — paste a path or use Choose"
+            spellCheck={false}
+          />
+          <button
+            className="btn btn-ghost"
+            onClick={onPickFolder}
+            style={{ flexShrink: 0, fontSize: '11px', padding: '5px 10px' }}
+            title="Choose export destination folder"
+          >
+            {exportDirHandle ? 'Change' : 'Choose'}
+          </button>
+        </div>
+        {exportDirHandle && (
+          <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '5px' }}>
+            All exports will be saved to this folder.
+          </div>
+        )}
+      </div>
+
+      {/* Node Spawner */}
       <div style={{ padding: '14px 14px 8px', borderBottom: '1px solid var(--border-subtle)' }}>
         <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>
           Node Spawner

@@ -305,6 +305,24 @@ export function downloadFile(content, filename, mimeType = 'application/json') {
   URL.revokeObjectURL(url);
 }
 
+// Writes a file directly into a user-chosen directory (File System Access API).
+// Falls back to downloadFile if dirHandle is null or the API fails.
+export async function writeToDirectoryOrDownload(dirHandle, content, filename, mimeType = 'application/json') {
+  if (!dirHandle) {
+    downloadFile(content, filename, mimeType);
+    return;
+  }
+  try {
+    const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(new Blob([content], { type: mimeType }));
+    await writable.close();
+  } catch {
+    // Permission revoked or other error — fall back to download
+    downloadFile(content, filename, mimeType);
+  }
+}
+
 export function readFileAsText(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
