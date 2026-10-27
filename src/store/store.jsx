@@ -14,6 +14,7 @@ const initialState = {
   ],
   edges: [],
   actors: [],
+  entry: 'start',
   selectedNodeId: 'start',
   importedAudioLib: '',
   importedSpriteLib: '',
@@ -38,6 +39,7 @@ function reducer(state, action) {
         nodes:             p.nodes             || [],
         edges:             p.edges             || [],
         actors:            p.actors            || [],
+        entry:             p.entry             || p.nodes?.[0]?.id || 'start',
         importedAudioLib:  p.importedAudioLib  || '',
         importedSpriteLib: p.importedSpriteLib || '',
         selectedNodeId:    p.nodes?.[0]?.id    || null,
@@ -45,6 +47,8 @@ function reducer(state, action) {
     }
     case 'SET_DIALOGUE_NAME':
       return { ...state, dialogueName: action.payload };
+    case 'SET_ENTRY':
+      return { ...state, entry: action.payload };
     case 'SET_IMPORTED_AUDIO':
       return { ...state, importedAudioLib: action.payload };
     case 'SET_IMPORTED_SPRITE':
@@ -190,6 +194,8 @@ function reducer(state, action) {
     }
 
     // ── Actors ────────────────────────────────────────────────────────────────
+    case 'REPLACE_ACTORS':
+      return { ...state, actors: action.payload };
     case 'ADD_ACTOR':
       return { ...state, actors: [...state.actors, createActor(action.payload || 'Actor')] };
     case 'UPDATE_ACTOR': {

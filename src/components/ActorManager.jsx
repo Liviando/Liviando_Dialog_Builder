@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { X, Users, Plus, Trash2, ChevronDown, ChevronRight, UserCircle } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { X, Users, Plus, Trash2, ChevronDown, ChevronRight, UserCircle, Upload, Download } from 'lucide-react';
 import { useStore } from '../store/store';
-import { resolveActorImage, resolveExpressionImage } from '../utils/dialogue';
+import { resolveActorImage, resolveExpressionImage, exportActors, parseActors, downloadFile, readFileAsText } from '../utils/dialogue';
 
 function ExpressionRow({ actor, expr }) {
   const { dispatch } = useStore();
@@ -183,6 +183,7 @@ function ActorCard({ actor }) {
 export default function ActorManager({ onClose }) {
   const { state, dispatch } = useStore();
   const [newActorName, setNewActorName] = useState('');
+  const importRef = useRef();
 
   const addActor = () => {
     const name = newActorName.trim() || 'NewActor';
@@ -192,6 +193,28 @@ export default function ActorManager({ onClose }) {
     }
     dispatch({ type: 'ADD_ACTOR', payload: name });
     setNewActorName('');
+  };
+
+  const handleExportActors = () => {
+    downloadFile(exportActors(state.actors), 'actors.json');
+  };
+
+  const handleImportActors = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const actors = parseActors(await readFileAsText(file));
+      if (state.actors.length > 0) {
+        if (!window.confirm(`This will replace your ${state.actors.length} existing actor(s). Continue?`)) {
+          e.target.value = '';
+          return;
+        }
+      }
+      dispatch({ type: 'REPLACE_ACTORS', payload: actors });
+    } catch (err) {
+      alert('Failed to import actors: ' + err.message);
+    }
+    e.target.value = '';
   };
 
   return (
@@ -253,6 +276,13 @@ export default function ActorManager({ onClose }) {
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginRight: 'auto' }}>
             Fallbacks: <span style={{ fontFamily: 'JetBrains Mono', color: 'var(--text-secondary)' }}>ActorName_main</span> · <span style={{ fontFamily: 'JetBrains Mono', color: 'var(--text-secondary)' }}>ActorName_expressionName</span>
           </div>
+          <button className="btn btn-ghost" onClick={() => importRef.current?.click()} title="Import actors from actors.json">
+            <Upload size={14} /> Import
+          </button>
+          <input ref={importRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportActors} />
+          <button className="btn btn-secondary" onClick={handleExportActors} title="Export actors to actors.json">
+            <Download size={14} /> Export
+          </button>
           <button className="btn btn-secondary" onClick={onClose}>Close</button>
         </div>
       </div>

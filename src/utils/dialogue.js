@@ -77,6 +77,17 @@ export function createActor(name = 'Actor') {
   return { name, imageCode: '', baseSoundCode: '', expressions: [] };
 }
 
+// ── Actors Import / Export ────────────────────────────────────────────────────
+export function exportActors(actors) {
+  return JSON.stringify({ version: '1.0', actors }, null, 2);
+}
+
+export function parseActors(text) {
+  const parsed = JSON.parse(text);
+  // Accept both { version, actors } shape and a bare array
+  return Array.isArray(parsed) ? parsed : (parsed.actors ?? []);
+}
+
 // ── BBCode Helper & Preview Generator ─────────────────────────────────────────
 export function applyBBCode(currentText, tagType, param = '') {
   const openTag = param ? `[${tagType}=${param}]` : `[${tagType}]`;
@@ -104,6 +115,7 @@ export function serializeWorkspace(state) {
     version: '1.1.0',
     dialogueName: state.dialogueName,
     nextNodeId: state.nextNodeId,
+    entry: state.entry,
     actors: state.actors,
     nodes: state.nodes,
     edges: state.edges,
@@ -113,13 +125,15 @@ export function serializeWorkspace(state) {
 }
 
 // ── Simplified Runtime JSON Export ───────────────────────────────────────────
-export function exportRuntimeJSON(dialogueName, nodes, edges, actors) {
+export function exportRuntimeJSON(dialogueName, nodes, edges, actors, entry) {
   const actorMap = Object.fromEntries(actors.map(a => [a.name, a]));
-  
-  // Prefer explicit node with id "start", otherwise locate root node without target incoming edges
-  const startNode = nodes.find(n => n.id === 'start');
+
+  // Use explicit entry if provided, otherwise fall back to heuristics
   const targetIds = new Set(edges.map(e => e.target));
-  const entryNode = startNode || nodes.find(n => !targetIds.has(n.id)) || nodes[0];
+  const entryNode = (entry && nodes.find(n => n.id === entry))
+    || nodes.find(n => n.id === 'start')
+    || nodes.find(n => !targetIds.has(n.id))
+    || nodes[0];
 
   const nodesOut = {};
   for (const node of nodes) {

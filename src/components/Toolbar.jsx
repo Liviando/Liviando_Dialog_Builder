@@ -47,12 +47,12 @@ export default function Toolbar({ onOpenActorManager, dialogueName, setDialogueN
 
   // ── Exports ───────────────────────────────────────────────────────────────
   const handleExportJSON = useCallback(() => {
-    const json = exportRuntimeJSON(state.dialogueName, state.nodes, state.edges, state.actors);
+    const json = exportRuntimeJSON(state.dialogueName, state.nodes, state.edges, state.actors, state.entry);
     downloadFile(JSON.stringify(json, null, 2), `${state.dialogueName}.json`);
   }, [state]);
 
   const handleExportTres = useCallback(() => {
-    const json = exportRuntimeJSON(state.dialogueName, state.nodes, state.edges, state.actors);
+    const json = exportRuntimeJSON(state.dialogueName, state.nodes, state.edges, state.actors, state.entry);
     const tres = exportGodotTres(state.dialogueName, json);
     downloadFile(tres, `${state.dialogueName}.tres`, 'text/plain');
   }, [state]);
@@ -123,7 +123,21 @@ export default function Toolbar({ onOpenActorManager, dialogueName, setDialogueN
 
       <div style={{ width: '1px', height: '24px', background: 'var(--border)', margin: '0 2px' }} />
 
-      {/* Workspace */}
+      {/* Entry node picker */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '7px', padding: '4px 10px' }}>
+        <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>▶ Entry</span>
+        <select
+          style={{ background: 'none', border: 'none', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 500, outline: 'none', fontFamily: 'JetBrains Mono', cursor: 'pointer', maxWidth: '100px' }}
+          value={state.entry || ''}
+          onChange={e => dispatch({ type: 'SET_ENTRY', payload: e.target.value })}
+        >
+          {state.nodes.map(n => (
+            <option key={n.id} value={n.id}>{n.id}</option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ width: '1px', height: '24px', background: 'var(--border)', margin: '0 2px' }} />
       <button className="btn btn-ghost" onClick={() => fileInputRef.current?.click()}>
         <FolderOpen size={14} /> Load
       </button>
